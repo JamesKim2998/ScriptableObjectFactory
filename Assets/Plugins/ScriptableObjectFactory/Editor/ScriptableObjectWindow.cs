@@ -39,30 +39,40 @@ namespace ScriptableObjectFactory
             }
         }
 
-        private string[] _searchResults = { };
-        private int _selectedIndex;
-        private static string[] _scriptableObjectNames;
-        private static int _selectedAssembly;
+        string[] _searchResults = { };
+        int _selectedIndex;
 
-        private static Type[] _types;
+        static Type[] _types;
+        static string[] _scriptableObjectNames;
 
-        private static Type[] Types
+        [MenuItem("Assets/Create/ScriptableObject")]
+        public static void Open()
         {
-            get { return _types; }
-            set
-            {
-                _types = value;
-                _scriptableObjectNames = _types.Select(t => t.FullName).ToArray();
-            }
+            var types = TypeCache.GetTypesDerivedFrom<ScriptableObject>();
+            _types = types.Where(ShouldIncludeType).ToArray();
+            _scriptableObjectNames = _types.Select(x => x.FullName).ToArray();
+            GetWindow<ScriptableObjectWindow>(true, "Create a new ScriptableObject", true).ShowPopup();
         }
 
-        public static void Init(Type[] scriptableObjects, bool getAllAssemblies)
+        static bool ShouldIncludeType(Type type)
         {
-            Types = scriptableObjects;
-            _selectedAssembly = Convert.ToInt32(getAllAssemblies);
+            if (type.IsSubclassOf(typeof(EditorWindow))
+                || type.IsSubclassOf(typeof(Editor)))
+                return false;
 
-            var window = GetWindow<ScriptableObjectWindow>(true, "Create a new ScriptableObject", true);
-            window.ShowPopup();
+            var fullName = type.FullName;
+            return !fullName.StartsWith("Unity")
+                   && !fullName.StartsWith("UnityEngine")
+                   && !fullName.StartsWith("UnityEditor")
+                   && !fullName.StartsWith("Sirenix")
+                   && !fullName.StartsWith("DG")
+                   && !fullName.StartsWith("E7")
+                   && !fullName.StartsWith("Heureka")
+                   && !fullName.StartsWith("Google")
+                   && !fullName.StartsWith("Zenject")
+                   && !fullName.StartsWith("TouchScript")
+                   && !fullName.StartsWith("ScriptableObjectFactory")
+                   && !fullName.StartsWith("Packages");
         }
 
         private void Awake()
@@ -82,14 +92,7 @@ namespace ScriptableObjectFactory
         {
             GUILayout.Space(6);
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Assembly:", GUILayout.Width(LabelWidth));
-            var selectedAssembly = GUILayout.Toolbar(_selectedAssembly, new[] {"C#", "All Assemblies"});
-            if (selectedAssembly != _selectedAssembly)
-            {
-                ScriptableObjectFactory.CreateScriptableObjectFactoryWindow(Convert.ToBoolean(selectedAssembly));
-                _searchResults = FindMatchingNames(_searchFilter);
-            }
-
+            _searchResults = FindMatchingNames(_searchFilter);
             GUILayout.EndHorizontal();
         }
 
@@ -116,7 +119,8 @@ namespace ScriptableObjectFactory
         {
             GUILayout.Space(6);
 
-            using (var scope = new EditorGUILayout.ScrollViewScope(_scrollPos,EditorStyles.helpBox)) {
+            using (var scope = new EditorGUILayout.ScrollViewScope(_scrollPos, EditorStyles.helpBox))
+            {
                 _selectedIndex = GUILayout.SelectionGrid(_selectedIndex, _searchResults, 1);
                 _scrollPos = scope.scrollPosition;
             }
@@ -134,7 +138,7 @@ namespace ScriptableObjectFactory
                 ProjectWindowUtil.StartNameEditingIfProjectWindowExists(
                     asset.GetInstanceID(),
                     CreateInstance<EndNameEdit>(),
-                    string.Format("{0}.asset", fileName),
+                    fileName + ".asset",
                     AssetPreview.GetMiniThumbnail(asset),
                     null);
 
@@ -148,9 +152,9 @@ namespace ScriptableObjectFactory
                 ? string.Empty
                 : _searchResults[_selectedIndex];
 
-            var matchingNames =  string.IsNullOrEmpty(filter)
+            var matchingNames = string.IsNullOrEmpty(filter)
                 ? _scriptableObjectNames
-                : _scriptableObjectNames.Where(scriptableObjectname => IsMatch(scriptableObjectname, filter)).ToArray();
+                : _scriptableObjectNames.Where(name => IsMatch(name, filter)).ToArray();
 
             var newIndex = Array.FindIndex(matchingNames, matchingName => matchingName == selectedName);
             _selectedIndex = newIndex < 0
@@ -160,7 +164,7 @@ namespace ScriptableObjectFactory
             return matchingNames;
         }
 
-        private static bool IsMatch(string text, string searchTerm)
+        static bool IsMatch(string text, string searchTerm)
         {
             try
             {
